@@ -1,0 +1,26 @@
+    1  2026-06-11 04:23:51.858593 IP (tos 0xc0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 169)
+    192.168.12.2 > 192.168.12.1: SMT 32768 > 2000, DATA, id 2, doff 14, offset 0, msglen 64, incoming 64, cutoff 0, TLS 1.2 record len 92, record seq 18446744073709551615, encrypted data 68
+    2  2026-06-11 04:23:51.858616 IP (tos 0xe0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 82)
+    192.168.12.1 > 192.168.12.2: SMT 2000 > 32768, CUTOFFS, id 3, doff 5, version 2, cutoffs [2147483647,0,0,0,1000000,15000,2800,200]
+    3  2026-06-11 04:23:59.063379 IP (tos 0xe0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 53)
+    192.168.12.1 > 192.168.12.2: SMT 2000 > 32770, GRANT, id 43, doff 5, offset 100000, priority 0
+    4  2026-06-11 04:24:03.271628 IP (tos 0xe0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 57)
+    192.168.12.1 > 192.168.12.2: SMT 2000 > 32771, RESEND, id 63, doff 5, offset 5580, length 2790, priority 7
+    5  2026-06-11 04:24:03.272040 IP (tos 0xe0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 48)
+    192.168.12.1 > 192.168.12.2: SMT 2000 > 32771, BUSY, id 63, doff 5
+    6  2026-06-11 04:24:08.328965 IP (tos 0xe0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 48)
+    192.168.12.1 > 192.168.12.2: SMT 2000 > 32772, UNKNOWN, id 93, doff 5
+    7  2026-06-11 04:23:51.861303 IP (tos 0xe0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 48)
+    192.168.12.1 > 192.168.12.2: SMT 2000 > 32768, NEED_ACK, id 21, doff 5
+    8  2026-06-11 04:24:03.403016 IP (tos 0xe0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 100)
+    192.168.12.2 > 192.168.12.1: SMT 32771 > 2000, ACK, id 68, doff 5, 2 acks [id 100 port 2000, id 102 port 2000]
+    9  2026-06-11 04:24:03.271690 IP (tos 0xe0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 1500)
+    192.168.12.2 > 192.168.12.1: SMT 32771 > 2000, DATA, id 62, doff 14, offset 5580, msglen 100000, incoming 8370, cutoff 2, retransmit 0x03, resend-offset 5580, TLS 1.2 record len 1423, record seq 18446744073709551615, encrypted data 1399
+   10  2026-06-11 04:24:08.328965 IP (tos 0xe0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 48)
+    192.168.12.1 > 192.168.12.2: SMT 2000 > 32772, FREEZE, id 93, doff 5
+   11  2026-06-11 04:43:01.698274 IP (tos 0xc0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 8640)
+    192.168.12.2 > 192.168.12.1: SMT 32768 > 2000, DATA, id 2, doff 13, offset 0, msglen 20000, incoming 20000, cutoff 0, TLS 1.2 record len 8563, record seq 0, encrypted data 8539
+   12  2026-06-11 04:43:01.698410 IP (tos 0xc0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 1500)
+    192.168.12.1 > 192.168.12.2: SMT 2000 > 32768, DATA, id 3, doff 13, offset 0, msglen 20000, incoming 20000, cutoff 0, TLS 1.2 record len 8563, record seq 0, partial 1423/8563
+   13  2026-06-11 04:43:01.698410 IP (tos 0xc0, ttl 64, id 1, offset 0, flags [DF], proto Homa (146), length 1500)
+    192.168.12.1 > 192.168.12.2: SMT 2000 > 32768, DATA, id 3, doff 13, offset 0, msglen 20000, incoming 20000, cutoff 0, record continuation 1428 bytes
