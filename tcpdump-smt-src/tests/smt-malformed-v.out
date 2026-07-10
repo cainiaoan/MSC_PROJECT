@@ -1,0 +1,16 @@
+    1  2026-06-11 05:20:00.000001 IP (tos 0xc0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 47)
+    192.168.12.2 > 192.168.12.1: SMT [length 27 < 28] (invalid)
+    2  2026-06-11 05:20:01.000002 IP (tos 0xc0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 71)
+    192.168.12.2 > 192.168.12.1: SMT 32768 > 2000, DATA, id 201, doff 14 [length 51 < 52] (invalid)
+    3  2026-06-11 05:20:02.000003 IP (tos 0xe0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 52)
+    192.168.12.1 > 192.168.12.2: SMT 2000 > 32768, GRANT, id 202, doff 5 [length 32 < 33] (invalid)
+    4  2026-06-11 05:20:03.000004 IP (tos 0xe0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 56)
+    192.168.12.1 > 192.168.12.2: SMT 2000 > 32769, RESEND, id 203, doff 5 [length 36 < 37] (invalid)
+    5  2026-06-11 05:20:04.000005 IP (tos 0xe0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 81)
+    192.168.12.1 > 192.168.12.2: SMT 2000 > 32770, CUTOFFS, id 204, doff 5 [length 61 < 62] (invalid)
+    6  2026-06-11 05:20:05.000006 IP (tos 0xe0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 99)
+    192.168.12.2 > 192.168.12.1: SMT 32771 > 2000, ACK, id 205, doff 5 [length 79 < 80] (invalid)
+    7  2026-06-11 05:20:06.000007 IP (tos 0xe0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 100)
+    192.168.12.2 > 192.168.12.1: SMT 32771 > 2000, ACK, id 206, doff 5, 6 acks [id 1000 port 2000, id 1001 port 2000, id 1002 port 2000, id 1003 port 2000, id 1004 port 2000], invalid count
+    8  2026-06-11 05:20:07.000008 IP (tos 0xe0, ttl 64, id 0, offset 0, flags [DF], proto Homa (146), length 48)
+    192.168.12.1 > 192.168.12.2: SMT 2000 > 32772, type 0x99, id 207, doff 5

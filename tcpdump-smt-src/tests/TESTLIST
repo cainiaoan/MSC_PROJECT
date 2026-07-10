@@ -996,6 +996,10 @@ someip2		someip2.pcap	someip2.out
 # SMT/Homa tests
 smt		smt.pcap	smt.out
 smt-v		smt.pcap	smt-v.out	-v
+smt-truncated		smt-truncated.pcap	smt-truncated.out
+smt-truncated-v		smt-truncated.pcap	smt-truncated-v.out	-v
+smt-malformed		smt-malformed.pcap	smt-malformed.out
+smt-malformed-v		smt-malformed.pcap	smt-malformed-v.out	-v
 
 # EDNS Options
 edns-opts       edns-opts.pcap      edns-opts.out
