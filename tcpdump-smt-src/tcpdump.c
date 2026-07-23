@@ -642,11 +642,13 @@ show_remote_devices_and_exit(void)
 #define E_FLAG_USAGE    "[ -E algo:secret ] "
 #define M_FLAG		"M:"
 #define M_FLAG_USAGE	"[ -M secret ] "
+#define SMT_DECRYPT_USAGE "[ --smt-decrypt server-port,client-key,client-iv,server-key,server-iv ]"
 #else
 #define E_FLAG
 #define E_FLAG_USAGE
 #define M_FLAG
 #define M_FLAG_USAGE
+#define SMT_DECRYPT_USAGE
 #endif
 
 #define SHORTOPTS "aAbB:c:C:dDe" E_FLAG "fF:gG:hHi:I" j_FLAG J_FLAG "KlL" m_FLAG M_FLAG "nNOpqQ:r:s:StT:uUvV:w:W:xXy:Y" z_FLAG "Z:#"
@@ -684,6 +686,7 @@ show_remote_devices_and_exit(void)
 #define OPTION_LENGTHS			138
 #define OPTION_TIME_T_SIZE		139
 #define OPTION_SKIP			140
+#define OPTION_SMT_DECRYPT		141
 
 static const struct option longopts[] = {
 	{ "buffer-size", required_argument, NULL, 'B' },
@@ -728,6 +731,9 @@ static const struct option longopts[] = {
 	{ "time-t-size", no_argument, NULL, OPTION_TIME_T_SIZE },
 	{ "ip-oneline", no_argument, NULL, 'g' },
 	{ "skip", required_argument, NULL, OPTION_SKIP },
+#ifdef HAVE_LIBCRYPTO
+	{ "smt-decrypt", required_argument, NULL, OPTION_SMT_DECRYPT },
+#endif
 	{ "version", no_argument, NULL, OPTION_VERSION },
 	{ NULL, 0, NULL, 0 }
 };
@@ -1816,6 +1822,11 @@ main(int argc, char **argv)
 #ifdef HAVE_LIBCRYPTO
 		case 'E':
 			ndo->ndo_espsecret = optarg;
+			break;
+
+		case OPTION_SMT_DECRYPT:
+			if (!smt_set_decryption_secret(ndo, optarg))
+				error("invalid --smt-decrypt value");
 			break;
 #endif
 
@@ -3529,6 +3540,8 @@ print_usage(FILE *f)
 "\t\t[ --print-sampling nth ] [ -Q in|out|inout ] [ -r file ]\n");
 	(void)fprintf(f,
 "\t\t[ -s snaplen ] [ --skip count ] [ -T type ] [ --version ]\n");
+	(void)fprintf(f,
+	"\t\t" SMT_DECRYPT_USAGE "\n");
 	(void)fprintf(f,
 "\t\t[ -V file ] [ -w file ] [ -W filecount ] [ -y datalinktype ]\n");
 #ifdef HAVE_PCAP_SET_TSTAMP_PRECISION

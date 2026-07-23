@@ -274,6 +274,15 @@ struct netdissect_options {
   void (*ndo_warning)(netdissect_options *,
 		      const char *fmt, ...)
 		      PRINTFLIKE_FUNCPTR(2, 3);
+
+#ifdef HAVE_LIBCRYPTO
+  int ndo_smt_decrypt;
+  uint16_t ndo_smt_server_port;
+  u_char ndo_smt_client_key[16];
+  u_char ndo_smt_client_iv[4];
+  u_char ndo_smt_server_key[16];
+  u_char ndo_smt_server_iv[4];
+#endif
 };
 
 extern WARN_UNUSED_RESULT int nd_push_buffer(netdissect_options *, u_char *, const u_char *, const u_int);
@@ -761,6 +770,9 @@ extern void sflow_print(netdissect_options *, const u_char *, u_int);
 extern void sip_print(netdissect_options *, const u_char *, u_int);
 extern void slow_print(netdissect_options *, const u_char *, u_int);
 extern void smt_print(netdissect_options *, const u_char *, u_int);
+#ifdef HAVE_LIBCRYPTO
+extern int smt_set_decryption_secret(netdissect_options *, const char *);
+#endif
 extern void smb_tcp_print(netdissect_options *, const u_char *, u_int);
 extern void smtp_print(netdissect_options *, const u_char *, u_int);
 extern int snap_print(netdissect_options *, const u_char *, u_int, u_int, const struct lladdr_info *, const struct lladdr_info *, u_int);

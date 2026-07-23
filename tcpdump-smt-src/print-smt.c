@@ -17,6 +17,14 @@
 #include <config.h>
 
 #include "netdissect-stdinc.h"
+
+#include <stdlib.h>
+#include <string.h>
+
+#ifdef HAVE_LIBCRYPTO
+#include <openssl/evp.h>
+#endif
+
 #include "netdissect.h"
 #include "extract.h"
 
@@ -46,6 +54,10 @@
 #define SMT_TLS_HEADER_LEN		5
 #define SMT_TLS_EXPLICIT_NONCE_LEN	8
 #define SMT_TLS_TAG_LEN			16
+#define SMT_TLS_KEY_LEN			16
+#define SMT_TLS_FIXED_IV_LEN		4
+#define SMT_TLS_NONCE_LEN		12
+#define SMT_TLS_AAD_LEN			13
 
 #define SMT_MAX_ACKS			5
 #define SMT_ACK_LEN			10
@@ -64,12 +76,205 @@ static const struct tok smt_packet_types[] = {
 	{ 0, NULL }
 };
 
+#ifdef HAVE_LIBCRYPTO
+#ifndef HAVE_EVP_CIPHER_CTX_NEW
+static EVP_CIPHER_CTX *
+EVP_CIPHER_CTX_new(void)
+{
+	return calloc(1, sizeof(EVP_CIPHER_CTX));
+}
+
 static void
-smt_tls_print(netdissect_options *ndo, const u_char *bp, u_int length)
+EVP_CIPHER_CTX_free(EVP_CIPHER_CTX *ctx)
+{
+	EVP_CIPHER_CTX_cleanup(ctx);
+	free(ctx);
+}
+#endif
+
+static int
+smt_hex_digit(char c)
+{
+	if (c >= '0' && c <= '9')
+		return c - '0';
+	if (c >= 'a' && c <= 'f')
+		return c - 'a' + 10;
+	if (c >= 'A' && c <= 'F')
+		return c - 'A' + 10;
+	return -1;
+}
+
+static int
+smt_decode_hex(const char *hex, size_t hex_len, u_char *output,
+    size_t output_len)
+{
+	size_t i;
+	int high, low;
+
+	if (hex_len != output_len * 2)
+		return 0;
+	for (i = 0; i < output_len; i++) {
+		high = smt_hex_digit(hex[i * 2]);
+		low = smt_hex_digit(hex[i * 2 + 1]);
+		if (high < 0 || low < 0)
+			return 0;
+		output[i] = (u_char)((high << 4) | low);
+	}
+	return 1;
+}
+
+/*
+ * Configure TLS 1.2 AES-128-GCM keys from:
+ * server-port,client-key,client-iv,server-key,server-iv
+ *
+ * An IV may contain either the four-byte TLS fixed IV or the full 12-byte
+ * value supplied by SMT; TLS 1.2 uses its first four bytes with the explicit
+ * eight-byte record nonce.
+ */
+int
+smt_set_decryption_secret(netdissect_options *ndo, const char *arg)
+{
+	const char *field[4], *end;
+	char *port_end;
+	size_t field_len[4], iv_len;
+	unsigned long port;
+	u_char client_key[SMT_TLS_KEY_LEN], client_iv[SMT_TLS_NONCE_LEN];
+	u_char server_key[SMT_TLS_KEY_LEN], server_iv[SMT_TLS_NONCE_LEN];
+	u_int i;
+
+	errno = 0;
+	port = strtoul(arg, &port_end, 10);
+	end = port_end;
+	if (errno != 0 || end == arg || port == 0 || port > UINT16_MAX ||
+	    *end != ',')
+		return 0;
+
+	end++;
+	for (i = 0; i < 4; i++) {
+		const char *comma;
+
+		field[i] = end;
+		comma = strchr(end, ',');
+		if (i != 3) {
+			if (comma == NULL)
+				return 0;
+			field_len[i] = (size_t)(comma - end);
+			end = comma + 1;
+		} else {
+			if (comma != NULL)
+				return 0;
+			field_len[i] = strlen(end);
+		}
+	}
+
+	if (!smt_decode_hex(field[0], field_len[0], client_key,
+	    sizeof(client_key)) ||
+	    !smt_decode_hex(field[2], field_len[2], server_key,
+	    sizeof(server_key)))
+		return 0;
+
+	if (field_len[1] == SMT_TLS_FIXED_IV_LEN * 2)
+		iv_len = SMT_TLS_FIXED_IV_LEN;
+	else if (field_len[1] == SMT_TLS_NONCE_LEN * 2)
+		iv_len = SMT_TLS_NONCE_LEN;
+	else
+		return 0;
+	if (!smt_decode_hex(field[1], field_len[1], client_iv, iv_len))
+		return 0;
+
+	if (field_len[3] == SMT_TLS_FIXED_IV_LEN * 2)
+		iv_len = SMT_TLS_FIXED_IV_LEN;
+	else if (field_len[3] == SMT_TLS_NONCE_LEN * 2)
+		iv_len = SMT_TLS_NONCE_LEN;
+	else
+		return 0;
+	if (!smt_decode_hex(field[3], field_len[3], server_iv, iv_len))
+		return 0;
+
+	ndo->ndo_smt_server_port = (uint16_t)port;
+	memcpy(ndo->ndo_smt_client_key, client_key, sizeof(client_key));
+	memcpy(ndo->ndo_smt_client_iv, client_iv, SMT_TLS_FIXED_IV_LEN);
+	memcpy(ndo->ndo_smt_server_key, server_key, sizeof(server_key));
+	memcpy(ndo->ndo_smt_server_iv, server_iv, SMT_TLS_FIXED_IV_LEN);
+	ndo->ndo_smt_decrypt = 1;
+	return 1;
+}
+
+static int
+smt_tls_decrypt(const u_char *record, uint16_t record_len,
+    const u_char *key, const u_char *fixed_iv, u_char **plaintext,
+    u_int *plaintext_len)
+{
+	EVP_CIPHER_CTX *ctx;
+	u_char nonce[SMT_TLS_NONCE_LEN], aad[SMT_TLS_AAD_LEN];
+	const u_char *ciphertext, *tag;
+	u_int ciphertext_len;
+	int len, final_len, ok;
+
+	if (record_len < SMT_TLS_EXPLICIT_NONCE_LEN + SMT_TLS_TAG_LEN)
+		return 0;
+	ciphertext_len =
+	    record_len - SMT_TLS_EXPLICIT_NONCE_LEN - SMT_TLS_TAG_LEN;
+	ciphertext = record + SMT_TLS_HEADER_LEN + SMT_TLS_EXPLICIT_NONCE_LEN;
+	tag = ciphertext + ciphertext_len;
+
+	memcpy(nonce, fixed_iv, SMT_TLS_FIXED_IV_LEN);
+	memcpy(nonce + SMT_TLS_FIXED_IV_LEN, record + SMT_TLS_HEADER_LEN,
+	    SMT_TLS_EXPLICIT_NONCE_LEN);
+	memcpy(aad, record + SMT_TLS_HEADER_LEN, SMT_TLS_EXPLICIT_NONCE_LEN);
+	memcpy(aad + SMT_TLS_EXPLICIT_NONCE_LEN, record, 3);
+	aad[11] = (u_char)(ciphertext_len >> 8);
+	aad[12] = (u_char)ciphertext_len;
+
+	*plaintext = malloc(ciphertext_len + EVP_MAX_BLOCK_LENGTH);
+	if (*plaintext == NULL)
+		return 0;
+
+	ctx = EVP_CIPHER_CTX_new();
+	if (ctx == NULL) {
+		free(*plaintext);
+		*plaintext = NULL;
+		return 0;
+	}
+
+	len = 0;
+	final_len = 0;
+	ok = EVP_DecryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, NULL, NULL) == 1 &&
+	    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN,
+	    SMT_TLS_NONCE_LEN, NULL) == 1 &&
+	    EVP_DecryptInit_ex(ctx, NULL, NULL, key, nonce) == 1 &&
+	    EVP_DecryptUpdate(ctx, NULL, &final_len, aad, sizeof(aad)) == 1 &&
+	    EVP_DecryptUpdate(ctx, *plaintext, &len, ciphertext,
+	    ciphertext_len) == 1 &&
+	    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, SMT_TLS_TAG_LEN,
+	    (void *)tag) == 1 &&
+	    EVP_DecryptFinal_ex(ctx, *plaintext + len, &final_len) == 1;
+	EVP_CIPHER_CTX_free(ctx);
+
+	if (!ok) {
+		free(*plaintext);
+		*plaintext = NULL;
+		return 0;
+	}
+	*plaintext_len = (u_int)(len + final_len);
+	return 1;
+}
+#endif
+
+static void
+smt_tls_print(netdissect_options *ndo, const u_char *bp, u_int length,
+    const u_char *key, const u_char *fixed_iv)
 {
 	uint16_t record_len;
 	uint64_t record_seq;
 	u_int record_available;
+#ifdef HAVE_LIBCRYPTO
+	u_char *plaintext;
+	u_int plaintext_len;
+#else
+	(void)key;
+	(void)fixed_iv;
+#endif
 
 	if (length < SMT_TLS_HEADER_LEN ||
 	    GET_U_1(bp) != SMT_TLS_CONTENT_TYPE ||
@@ -93,6 +298,28 @@ smt_tls_print(netdissect_options *ndo, const u_char *bp, u_int length)
 	    ndo->ndo_vflag)
 		ND_PRINT(", encrypted data %u",
 		    record_len - SMT_TLS_EXPLICIT_NONCE_LEN - SMT_TLS_TAG_LEN);
+
+#ifdef HAVE_LIBCRYPTO
+	if (key == NULL || record_available < record_len)
+		return;
+	if (!ND_TTEST_LEN(bp, SMT_TLS_HEADER_LEN + record_len)) {
+		nd_print_trunc(ndo);
+		return;
+	}
+	if (!smt_tls_decrypt(bp, record_len, key, fixed_iv, &plaintext,
+	    &plaintext_len)) {
+		ND_PRINT(", decrypt failed (authentication)");
+		return;
+	}
+	ND_PRINT(", decrypted payload %u bytes", plaintext_len);
+	if (!nd_push_buffer(ndo, plaintext, plaintext, plaintext_len)) {
+		free(plaintext);
+		(*ndo->ndo_error)(ndo, S_ERR_ND_MEM_ALLOC,
+		    "%s: can't push decryption buffer", __func__);
+	}
+	hex_and_ascii_print(ndo, "\n\t", plaintext, plaintext_len);
+	nd_pop_packet_info(ndo);
+#endif
 }
 
 static void
@@ -104,6 +331,7 @@ smt_data_print(netdissect_options *ndo, const u_char *bp, u_int length,
 	uint16_t ack_server_port, cutoff_version;
 	uint8_t retransmit;
 	uint32_t resend_offset;
+	const u_char *key, *fixed_iv;
 
 	ND_ICHECK_U(length, <, SMT_DATA_HEADER_LEN);
 
@@ -126,8 +354,24 @@ smt_data_print(netdissect_options *ndo, const u_char *bp, u_int length,
 			    retransmit, resend_offset);
 	}
 
+	key = NULL;
+	fixed_iv = NULL;
+#ifdef HAVE_LIBCRYPTO
+	if (ndo->ndo_smt_decrypt) {
+		if (GET_BE_U_2(bp) == ndo->ndo_smt_server_port) {
+			key = ndo->ndo_smt_server_key;
+			fixed_iv = ndo->ndo_smt_server_iv;
+		} else if (GET_BE_U_2(bp + 2) == ndo->ndo_smt_server_port) {
+			key = ndo->ndo_smt_client_key;
+			fixed_iv = ndo->ndo_smt_client_iv;
+		} else {
+			ND_PRINT(", decrypt skipped (server port %u not present)",
+			    ndo->ndo_smt_server_port);
+		}
+	}
+#endif
 	smt_tls_print(ndo, bp + SMT_DATA_HEADER_LEN,
-	    length - SMT_DATA_HEADER_LEN);
+	    length - SMT_DATA_HEADER_LEN, key, fixed_iv);
 	return;
 
 invalid:
